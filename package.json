@@ -10,9 +10,17 @@
         "production": "mix --production"
     },
     "devDependencies": {
-        "axios": "^0.21",
+        "axios": "^0.21.4",
         "laravel-mix": "^6.0.6",
         "lodash": "^4.17.19",
         "postcss": "^8.1.14"
+    },
+    "dependencies": {
+        "dotenv": "^16.4.5",
+        "events": "^3.3.0",
+        "minimist": "^1.2.8",
+        "mysql2": "^3.9.1",
+        "pg": "^8.11.3",
+        "sequelize": "^6.37.1"
     }
 }
