@@ -134,14 +134,15 @@ const getData = async (tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelu
     }
 }
 
+let is_first = true;
 async function main(limit = null){
-    let kel = [];
-    if(limit){
-        console.log('limit running : '+limit);
-        kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL LIMIT "+limit);
-    }else{
-        kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL LIMIT 10");
+    console.log('limit multi scarp : '+limit);
+    if(is_first){
+        await sleep(5000);
+        is_first = false;
     }
+    let kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + limit);
+    // let kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL LIMIT "+limit);
     for(let em of kel.rows){
         myAntrian[em.kode] = new EventEmitter();
         myAntrian[em.kode].on('start',async ()=>{

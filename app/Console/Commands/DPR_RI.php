@@ -62,6 +62,7 @@ class DPR_RI extends Command
         foreach($resp as $res){
             echo "DAPIL RI : ".$res['nama']."\n";
             $url = "https://sirekap-obj-data.kpu.go.id/pemilu/hhcd/pdpr/".$res['kode'].".json";
+            echo "URL: $url\n";
             $suara = self::httpGet($url);
             $pdpr = new HasilPdpr();
             $pdpr->ts = $suara['ts'];

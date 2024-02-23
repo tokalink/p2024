@@ -50,11 +50,6 @@ const kueri = (sql) => {
           return reject(error);
         }
         resolve(results);
-        // if(results.rows.length){
-        //   resolve(results.rows);
-        // }else{
-        //     resolve(results);
-        // }
       });
     });
   };
