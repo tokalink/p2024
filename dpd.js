@@ -127,11 +127,11 @@ const getData = async (tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelu
         await hasil_dpd_detail(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.kode, tp.nama);
         await hasil_dpd_image(resp, tp.kode);
         //update kelurahan ls_dpd
-        await updateDB('kelurahans', {ls_dpd: new Date()}, {kode: kel_kode});
-        myAntrian[kel_kode].emit('done');
-        main(1);
         console.log('done update kelurahan ls_dpd kelurahan : '+kelurahan_kode+' tps : '+tp.kode);
     }
+    await updateDB('kelurahans', {ls_dpd: new Date()}, {kode: kel_kode});
+    myAntrian[kel_kode].emit('done');
+    main(1);
 }
 
 let is_first = true;
@@ -142,7 +142,6 @@ async function main(limit = null){
         is_first = false;
     }
     let kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + limit);
-    // let kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL LIMIT "+limit);
     for(let em of kel.rows){
         myAntrian[em.kode] = new EventEmitter();
         myAntrian[em.kode].on('start',async ()=>{
@@ -151,7 +150,6 @@ async function main(limit = null){
             let kota_kode = kode.substring(0,4);
             let kecamatan_kode = kode.substring(0,6);
             let kelurahan_kode = kode.substring(0,13);
-    
             let url = `https://sirekap-obj-data.kpu.go.id/wilayah/pemilu/ppwp/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}.json`;
             let url2 = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdpd/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
             let tps = await Get(url);
