@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateHasilPdprDetailsTable extends Migration
+return new class extends Migration
 {
     /**
      * Run the migrations.
@@ -21,10 +21,11 @@ class CreateHasilPdprDetailsTable extends Migration
             $table->string('kelurahan_kode')->nullable();
             $table->string('nama')->nullable();
             $table->string('kode')->nullable();
-            $table->string('dpd_id')->nullable();
+            $table->string('dpr_id')->nullable();
             $table->string('suara')->nullable();
-            $table->string('kode_dapil')->nullable();
             $table->timestamps();
+            $table->integer('partai_id')->nullable();
+            $table->string('kode_dapil')->nullable();
         });
     }
 
@@ -37,4 +38,4 @@ class CreateHasilPdprDetailsTable extends Migration
     {
         Schema::dropIfExists('hasil_pdpr_details');
     }
-}
+};

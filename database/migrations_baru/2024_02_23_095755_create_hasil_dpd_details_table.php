@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateHasilPdprDetailsTable extends Migration
+return new class extends Migration
 {
     /**
      * Run the migrations.
@@ -13,7 +13,7 @@ class CreateHasilPdprDetailsTable extends Migration
      */
     public function up()
     {
-        Schema::create('hasil_pdpr_details', function (Blueprint $table) {
+        Schema::create('hasil_dpd_details', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->string('provinsi_kode')->nullable();
             $table->string('kota_kode')->nullable();
@@ -23,7 +23,6 @@ class CreateHasilPdprDetailsTable extends Migration
             $table->string('kode')->nullable();
             $table->string('dpd_id')->nullable();
             $table->string('suara')->nullable();
-            $table->string('kode_dapil')->nullable();
             $table->timestamps();
         });
     }
@@ -35,6 +34,6 @@ class CreateHasilPdprDetailsTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('hasil_pdpr_details');
+        Schema::dropIfExists('hasil_dpd_details');
     }
-}
+};

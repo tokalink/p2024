@@ -193,7 +193,7 @@ const getData = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelur
         // }
         await hasil_pdprs(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode);
         await hasil_pdpr_details(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode);
-        hasil_pdpr_images(resp, tp.kode);
+        await hasil_pdpr_images(resp, tp.kode);
     }
     // update kelurahan
     await kueri(`UPDATE kelurahans SET ls_pdpr = now() WHERE kode = '${kel_kode}'`);
