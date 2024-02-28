@@ -1,4 +1,7 @@
 
+#nodejs
+
+npm install
 
 # RUN DPD
 Jika menggunakan pm2 
