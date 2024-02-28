@@ -1,10 +1,12 @@
-const { insertDB, kueri, updateDB } = require('./db');
+const { insertDB, kueri, updateDB, createFolder, downloadImage, fileExist } = require('./db');
 require('events').EventEmitter.defaultMaxListeners = 0
 const EventEmitter = require('events');
-const axios = require('axios');
 const args = require('minimist')(process.argv.slice(2));
 var run = args['r'] || 10;
+var local_image = args['l'] || 'n';
+var filter_prov = args['f'] || 'n';
 var myAntrian = [];
+const readline = require('readline');
 
 const sleep = (ms) => {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -15,7 +17,6 @@ const Get = async (url) => {
     const response = await axios.get(url);
     return response.data;
 }
-
 
 const hasil_dpd = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_kode, tps_nama) => {
     let msg = 'hasil_dpd null';
@@ -94,7 +95,7 @@ const hasil_dpd_detail = async (resp, provinsi_kode, kota_kode, kecamatan_kode, 
     console.log(msg);
 }
 
-const hasil_dpd_image = async(resp, tps_kode) =>{
+const hasil_dpd_image = async(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_kode, tps_nama) =>{
     let msg = 'hasil_dpd_image null';
     let image = resp.images ?? null;
     if(image){
@@ -104,6 +105,26 @@ const hasil_dpd_image = async(resp, tps_kode) =>{
                 dataInsert.kode = tps_kode;
                 dataInsert.image = value;
                 dataInsert.created_at = new Date();
+
+                //if use local image
+                if(local_image == 'y'){
+                    let prov_nama = await kueri(`SELECT nama FROM "provinsis" WHERE "kode" = '${provinsi_kode}'`);
+                    let kota_nama = await kueri(`SELECT nama FROM "kotas" WHERE "kode" = '${kota_kode}'`);
+                    let kec_nama = await kueri(`SELECT nama FROM "kecamatans" WHERE "kode" = '${kecamatan_kode}'`);
+                    let kel_nama = await kueri(`SELECT nama FROM "kelurahans" WHERE "kode" = '${kelurahan_kode}'`);
+                    prov_nama = prov_nama.rows[0].nama.replace(/\//g, '-');
+                    kota_nama = kota_nama.rows[0].nama.replace(/\//g, '-');
+                    kec_nama = kec_nama.rows[0].nama.replace(/\//g, '-');
+                    kel_nama = kel_nama.rows[0].nama.replace(/\//g, '-');
+                    let folder = `public/images/DPD/${prov_nama}/${kota_nama}/${kec_nama}/${kel_nama}/${tps_nama}`;
+                    createFolder(folder);
+                    let url = value;
+                    let filename = url.split('/').pop();
+                    if(!fileExist(folder+'/'+filename)){
+                        await downloadImage(url, folder, filename);
+                    }
+                    dataInsert.local_image = folder+'/'+filename;
+                }
                 let cek = await kueri(`SELECT * FROM "hasil_dpd_images" WHERE "kode" = '${tps_kode}' AND "image" = '${value}'`);
                 if(cek.rows.length > 0){
                     msg = 'update hasil_dpd_images';
@@ -118,30 +139,45 @@ const hasil_dpd_image = async(resp, tps_kode) =>{
     console.log(msg);
 }
 
-const getData = async (tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_kode, kel_nama) => {
+const getData = async (tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_kode, kel_nama, filter) => {
     console.log(`Jumlah tps di ${kel_nama} : ${tps.length}`);
     for(let tp of tps){
         let url = `${url2}/${tp.kode}.json`;
         let resp = await Get(url);
         await hasil_dpd(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.kode, tp.nama);
         await hasil_dpd_detail(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.kode, tp.nama);
-        await hasil_dpd_image(resp, tp.kode);
+        await hasil_dpd_image(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.kode, tp.nama);
         //update kelurahan ls_dpd
         console.log('done update kelurahan ls_dpd kelurahan : '+kelurahan_kode+' tps : '+tp.kode);
     }
     await updateDB('kelurahans', {ls_dpd: new Date()}, {kode: kel_kode});
     myAntrian[kel_kode].emit('done');
-    main(1);
+    main(1, filter);
 }
 
 let is_first = true;
-async function main(limit = null){
-    console.log('limit multi scarp : '+limit);
+async function main(limit = null, filter = null){
+    let msg = 'limit multi scarp : '+limit;
+    if(local_image == 'y'){
+        msg = msg+' download local image';
+    }else{
+        msg = msg+' not use local image';
+    }
+    console.log(msg);
     if(is_first){
         await sleep(5000);
         is_first = false;
     }
-    let kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + limit);
+    let kel = null;
+    if(filter){
+        kel = await kueri("SELECT * FROM kelurahans WHERE kode LIKE '"+filter+"%' AND ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + limit);
+    }else{
+        kel = await kueri("SELECT * FROM kelurahans WHERE kode NOT LIKE '99%' AND ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + limit);
+    }
+    if(kel.rows.length == 0){
+        console.log('no data');
+        return;
+    }
     for(let em of kel.rows){
         myAntrian[em.kode] = new EventEmitter();
         myAntrian[em.kode].on('start',async ()=>{
@@ -153,9 +189,31 @@ async function main(limit = null){
             let url = `https://sirekap-obj-data.kpu.go.id/wilayah/pemilu/ppwp/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}.json`;
             let url2 = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdpd/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
             let tps = await Get(url);
-            getData(tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, em.kode, em.nama);
+            getData(tps, url2, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, em.kode, em.nama, filter);
         });
         myAntrian[em.kode].emit('start');
     }
 }
-main(run);
+
+if(filter_prov == 'y'){
+const provList = async () => {
+    let prov = await kueri("SELECT * FROM provinsis WHERE kode NOT LIKE '99%'");
+    for(let em of prov.rows){
+        console.log(em.kode+' - '+em.nama);
+    }
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+        
+    // Menggunakan rl.question untuk membuat pertanyaan
+    rl.question('Masukan kode provinsi: ', (kode) => {
+        main(run, kode);
+        rl.close();
+    });
+}
+provList();
+}else{
+    main(run);
+}
+

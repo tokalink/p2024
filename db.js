@@ -1,5 +1,8 @@
 require('dotenv').config();
 const { Client } = require('pg');
+const fs = require('fs');
+const axios = require('axios');
+const path = require('path');
 const client = new Client({
   host: '127.0.0.1',
   user: process.env.DB_USERNAME,
@@ -53,10 +56,43 @@ const kueri = (sql) => {
       });
     });
   };
+
+
+//make function create folder if not exist 
+const createFolder = (folder) => {
+    if (!fs .existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+    }
+}
+
+//fuction cek file exist
+const fileExist = (path) => {
+    return fs.existsSync(path);
+}
+
+//function download image with axios
+const downloadImage = (url, folder, filename) => {
+  const path = `${folder}/${filename}`;
+  const writer = fs.createWriteStream(path);
+  return axios({
+    method: 'get',
+    url: url,
+    responseType: 'stream',
+  }).then(response => {
+    response.data.pipe(writer);
+    return new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+  });
+}
   
 
   module.exports={
     insertDB,
     kueri,
-    updateDB
+    updateDB,
+    createFolder,
+    downloadImage,
+    fileExist
 }

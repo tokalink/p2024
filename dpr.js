@@ -1,9 +1,12 @@
-const { insertDB, kueri, updateDB } = require('./db');
+const { insertDB, kueri, updateDB, createFolder, downloadImage, fileExist } = require('./db');
 require('events').EventEmitter.defaultMaxListeners = 0
 const EventEmitter = require('events');
 const axios = require('axios');
 const args = require('minimist')(process.argv.slice(2));
+const readline = require('readline');
 var run = args['r'] || 10;
+var local_image = args['l'] || 'n';
+var filter_prov = args['f'] || 'n';
 var myAntrian = [];
 
 const sleep = (ms) => {
@@ -16,64 +19,10 @@ const Get = async (url) => {
     return response.data;
 }
 
-const hasil_pdprs_off = async (resp) =>{
-    let url1 = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcd/pdpr/${dapil.kode}.json`;
-    let resp1 = await Get(url1);
-    //insert in hasil_pdprs
-    let dataInsert = {};
-    dataInsert.ts = resp1.ts;
-    if(resp1.chart){
-        let ch = resp1.chart;
-        dataInsert.chart1 = ch[1];
-        dataInsert.chart2 = ch[2];
-        dataInsert.chart3 = ch[3];
-        dataInsert.chart4 = ch[4];
-        dataInsert.chart5 = ch[5];
-        dataInsert.chart6 = ch[6];
-        dataInsert.chart7 = ch[7];
-        dataInsert.chart8 = ch[8];
-        dataInsert.chart9 = ch[9];
-        dataInsert.chart10 = ch[10];
-        dataInsert.chart11 = ch[11];
-        dataInsert.chart12 = ch[12];
-        dataInsert.chart13 = ch[13];
-        dataInsert.chart14 = ch[14];
-        dataInsert.chart15 = ch[15];
-        dataInsert.chart16 = ch[16];
-        dataInsert.chart17 = ch[17];
-        dataInsert.chart24 = ch[24];
-        dataInsert.persen = ch.persen;
-    }   
-    if(resp1.progres){
-        dataInsert.progres_total = resp1.progres.total;
-        dataInsert.progres = resp1.progres.progres;
-    }
-    dataInsert.kode = dapil.kode;
-    dataInsert.created_at = new Date();
-    // let cek = await kueri(`select * from hasil_pdprs where kode = '${dapil.kode}'`);
-    // if(cek.rows.length > 0){
-    //     await updateDB('hasil_pdprs', dataInsert, {kode: dapil.kode});
-    //     console.log('updated DPR RI Kode dapil: ' + dapil.kode);
-    // }else{
-    //     await insertDB('hasil_pdprs', dataInsert);
-    //     console.log('inserted DPR RI Kode dapil: ' + dapil.kode);
-    // }
-
-    //insert in hasil_pdpr_tables
-    let tables = resp1.table ?? null;
-    if(tables){
-        for(let [key, value] of Object.entries(tables)){
-            console.log('key : '+key);
-            console.log(value);
-        }
-    }
-    // let dataTable = {};
-    // dataTable.ts = resp1.ts;
-}
-
-const hasil_pdprs = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_nama, tps_kode) =>{
+const hasil_pdprs = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_nama, tps_kode, tingkat) =>{
     let msg = 'hasil_pdprs null';
     let hasil_pdprs = {};
+    hasil_pdprs.tingkat = tingkat;
     hasil_pdprs.provinsi_kode = provinsi_kode;
     hasil_pdprs.kota_kode = kota_kode;
     hasil_pdprs.kecamatan_kode = kecamatan_kode;
@@ -117,14 +66,15 @@ const hasil_pdprs = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelur
         hasil_pdprs.created_at = new Date();
         await insertDB('hasil_pdprs', hasil_pdprs);
     }  
-    console.log(msg);
+    // console.log(msg);
 }
 
-const hasil_pdpr_details = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_nama, tps_kode) =>{
+const hasil_pdpr_details = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_nama, tps_kode, tingkat) =>{
     let msg = 'hasil_pdpr_details null';
     let caleg = resp.caleg ?? null;
     if(caleg){
         let dataDetail = {};
+        dataDetail.tingkat = tingkat;
         dataDetail.provinsi_kode = provinsi_kode;
         dataDetail.kota_kode = kota_kode;
         dataDetail.kecamatan_kode = kecamatan_kode;
@@ -154,18 +104,42 @@ const hasil_pdpr_details = async (resp, provinsi_kode, kota_kode, kecamatan_kode
             await insertDB('hasil_pdpr_details', dataDetail);
         }
     }
-    console.log(msg);
+    // console.log(msg);
 }
 
-const hasil_pdpr_images = async (resp, tps_kode) =>{
+const hasil_pdpr_images = async (resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tps_nama, tps_kode, tingkat) =>{
     let msg = 'hasil_pdpr_images null';
     let image = resp.images ?? null;
     if(image){
         for(let value of image){
             if(value){
                 let dataImage = {};
+                dataImage.tingkat = tingkat;
                 dataImage.kode = tps_kode;
                 dataImage.image = value;
+                dataImage.kode_dapil = resp.kode_dapil ?? null;
+
+                //if use local image
+                if(local_image == 'y'){
+                    let sub_folder = tingkat == 2 ? 'DPR RI' : tingkat == 3 ? 'DPRD Provinsi' : 'DPRD Kabupaten';
+                    let prov_nama = await kueri(`SELECT nama FROM "provinsis" WHERE "kode" = '${provinsi_kode}'`);
+                    let kota_nama = await kueri(`SELECT nama FROM "kotas" WHERE "kode" = '${kota_kode}'`);
+                    let kec_nama = await kueri(`SELECT nama FROM "kecamatans" WHERE "kode" = '${kecamatan_kode}'`);
+                    let kel_nama = await kueri(`SELECT nama FROM "kelurahans" WHERE "kode" = '${kelurahan_kode}'`);
+                    prov_nama = prov_nama.rows[0].nama.replace(/\//g, '-');
+                    kota_nama = kota_nama.rows[0].nama.replace(/\//g, '-');
+                    kec_nama = kec_nama.rows[0].nama.replace(/\//g, '-');
+                    kel_nama = kel_nama.rows[0].nama.replace(/\//g, '-');
+                    let folder = `public/images/${sub_folder}/${prov_nama}/${kota_nama}/${kec_nama}/${kel_nama}/${tps_nama}`;
+                    createFolder(folder);
+                    let url = value;
+                    let filename = url.split('/').pop();
+                    if(!fileExist(folder+'/'+filename)){
+                        await downloadImage(url, folder, filename);
+                        dataImage.local_image = folder+'/'+filename;
+                    }
+                }
+
                 let cek = await kueri(`SELECT * FROM "hasil_pdpr_images" WHERE "kode" = '${tps_kode}' AND "image" = '${value}'`);
                 if(cek.rows.length > 0){
                     msg = 'update hasil_pdpr_images';
@@ -179,10 +153,19 @@ const hasil_pdpr_images = async (resp, tps_kode) =>{
             }
         }
     }
-    console.log(msg);
+    // console.log(msg);
 }
 
-const getData = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_nama, kel_kode) =>{
+const ifDoneAll = async (kel_nama, kel_kode, filter) => {
+    if(myAntrian[kel_kode] == 3){
+        myAntrian[kel_kode] = 0;
+        await kueri(`UPDATE kelurahans SET ls_pdpr = now() WHERE kode = '${kel_kode}'`);
+        main(1, filter);
+        console.log('done update kelurahan ls_pdpr kelurahan : '+kel_nama);
+    }
+}
+
+const getData = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_nama, kel_kode, filter) =>{
     console.log(`Jumlah tps di ${kel_nama} : ${tps.length}`);
     for(let tp of tps){
         let resp = await Get(`${url}/${tp.kode}.json`);
@@ -191,17 +174,47 @@ const getData = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelur
         //     console.log(resp);
         //     break;
         // }
-        await hasil_pdprs(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode);
-        await hasil_pdpr_details(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode);
-        await hasil_pdpr_images(resp, tp.kode);
+        await hasil_pdprs(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 2);
+        await hasil_pdpr_details(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 2);
+        await hasil_pdpr_images(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 2);
     }
-    // update kelurahan
-    await kueri(`UPDATE kelurahans SET ls_pdpr = now() WHERE kode = '${kel_kode}'`);
-    main(1);
+    myAntrian[kel_kode] = myAntrian[kel_kode] + 1 || 1;
+    ifDoneAll(kel_nama, kel_kode, filter);
 }
 
-async function main(run){
-    let kel = await kueri("SELECT kode,nama FROM kelurahans WHERE ls_dpd IS NULL ORDER BY RANDOM() LIMIT " + run);
+const dataDPR_prov = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_nama, kel_kode, filter) =>{
+    for(let tp of tps){
+        let resp = await Get(`${url}/${tp.kode}.json`);
+        await hasil_pdprs(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 3);
+        await hasil_pdpr_details(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 3);
+        await hasil_pdpr_images(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 3);
+    }
+    myAntrian[kel_kode] = myAntrian[kel_kode] + 1 || 1;
+    ifDoneAll(kel_nama, kel_kode, filter);
+}
+
+const dataDPR_kab = async (tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, kel_nama, kel_kode, filter) =>{
+    for(let tp of tps){
+        let resp = await Get(`${url}/${tp.kode}.json`);
+        await hasil_pdprs(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 4);
+        await hasil_pdpr_details(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 4);
+        await hasil_pdpr_images(resp, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, tp.nama, tp.kode, 4);
+    }
+    myAntrian[kel_kode] = myAntrian[kel_kode] + 1 || 1;
+    ifDoneAll(kel_nama, kel_kode, filter);
+}
+ 
+async function main(run, filter = null){
+    let kel = null;
+    if(filter){
+        kel = await kueri("SELECT kode,nama FROM kelurahans WHERE kode LIKE '"+filter+"%' AND ls_pdpr IS NULL ORDER BY RANDOM() LIMIT " + run);
+    }else{
+        kel = await kueri("SELECT kode,nama FROM kelurahans WHERE ls_pdpr IS NULL ORDER BY RANDOM() LIMIT " + run);
+    }
+    if(kel.rows.length == 0){
+        console.log('no data');
+        return;
+    }
     for(let ke of kel.rows){
         let kode = ke.kode;
         let provinsi_kode = kode.substring(0,2);
@@ -210,10 +223,43 @@ async function main(run){
         let kelurahan_kode = kode.substring(0,13);
     
         let url_tps = `https://sirekap-obj-data.kpu.go.id/wilayah/pemilu/ppwp/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}.json`;
-        let url = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdpr/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
         let tps = await Get(url_tps);
-        getData(tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, ke.nama, ke.kode);
-        // break;
+
+        // DPR RI
+        let url = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdpr/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
+        getData(tps, url, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, ke.nama, ke.kode, filter);
+
+        // DPRD Provinsi
+        let url_prov = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdprdp/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
+        dataDPR_prov(tps, url_prov, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, ke.nama, ke.kode, filter);
+
+        // DPRD Kabupaten
+        let url_kab = `https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/pdprdk/${provinsi_kode}/${kota_kode}/${kecamatan_kode}/${kelurahan_kode}`;
+        dataDPR_kab(tps, url_kab, provinsi_kode, kota_kode, kecamatan_kode, kelurahan_kode, ke.nama, ke.kode, filter);
     }
 }
-main(run);
+
+
+if(filter_prov == 'y'){
+const provList = async () => {
+    let prov = await kueri("SELECT * FROM provinsis WHERE kode NOT LIKE '99%'");
+    for(let em of prov.rows){
+        console.log(em.kode+' - '+em.nama);
+    }
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+        
+    // Menggunakan rl.question untuk membuat pertanyaan
+    rl.question('Masukan kode provinsi: ', (kode) => {
+        main(run, kode);
+        rl.close();
+    });
+}
+provList();
+}else{
+    main(run);
+}
+    
+    
